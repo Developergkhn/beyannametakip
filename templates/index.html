@@ -645,14 +645,51 @@
 
 <!-- MAİL MODALI -->
 <div id="mailModal" class="modal-overlay">
-    <div class="modal-content" style="width:360px;">
-        <button onclick="closeMailModal()" style="position:absolute;right:15px;top:15px;border:none;background:none;font-size:24px;cursor:pointer;">&times;</button>
-        <h3 style="color:var(--secondary);margin-top:0;">✉️ Mail Gönder</h3>
-        <p id="mailCheckedInfo" style="font-size:12px;color:var(--success);font-weight:bold;margin-bottom:15px;"></p>
-        <input type="email" id="mailAddressInput" placeholder="E-posta adresi yazın..." style="width:100%;padding:10px;border-radius:8px;border:1px solid #ddd;margin-bottom:12px;font-size:14px;">
-        <div class="mail-btn-row">
-            <button class="sl-btn" style="background:var(--secondary);flex:2;" onclick="sendMail()">📨 Gönder</button>
-            <button class="sl-btn" style="background:#7f8c8d;flex:1;" onclick="closeMailModal()">İptal</button>
+    <div class="modal-content" style="width:440px;max-width:100%;">
+        <button onclick="closeMailModal()" style="position:absolute;right:15px;top:15px;border:none;background:none;font-size:24px;cursor:pointer;z-index:1;">&times;</button>
+        <h3 style="color:var(--secondary);margin-top:0;">&#9993;&#65039; Mail G&#246;nder</h3>
+        <p id="mailCheckedInfo" style="font-size:12px;color:var(--success);font-weight:bold;margin-bottom:12px;"></p>
+
+        <!-- ADIM GÖSTERGESİ -->
+        <div style="display:flex;margin-bottom:18px;border-radius:8px;overflow:hidden;border:1px solid #e0e0e0;">
+            <div id="mailStep1" style="flex:1;padding:7px 2px;font-size:10px;font-weight:bold;text-align:center;background:var(--secondary);color:white;transition:0.3s;">1. Adres</div>
+            <div id="mailStep2" style="flex:1;padding:7px 2px;font-size:10px;font-weight:bold;text-align:center;background:#e9ecef;color:#999;transition:0.3s;">2. Haz&#305;rlan&#305;yor</div>
+            <div id="mailStep3" style="flex:1;padding:7px 2px;font-size:10px;font-weight:bold;text-align:center;background:#e9ecef;color:#999;transition:0.3s;">3. Gönder</div>
+        </div>
+
+        <!-- PANEL 1: E-posta adresi -->
+        <div id="mailPanel1">
+            <label style="font-size:11px;font-weight:bold;color:var(--primary);display:block;margin-bottom:6px;text-align:left;">Alıcı E-posta Adresi:</label>
+            <input type="email" id="mailAddressInput" placeholder="ornek@mail.com" style="width:100%;padding:11px 12px;border-radius:8px;border:1px solid #ddd;margin-bottom:14px;font-size:14px;">
+            <div style="display:flex;gap:8px;">
+                <button class="sl-btn" style="background:var(--secondary);flex:2;" onclick="sendMail()">Devam Et &#8594;</button>
+                <button class="sl-btn" style="background:#7f8c8d;flex:1;" onclick="closeMailModal()">İptal</button>
+            </div>
+        </div>
+
+        <!-- PANEL 2: İşlem durumu (kopyalama veya ZIP) -->
+        <div id="mailPanel2" style="display:none;">
+            <!-- Durum kutusu -->
+            <div id="mailStatusBox" style="border-radius:10px;padding:16px;margin-bottom:12px;text-align:center;background:#f8f9fa;border:1px solid #e0e0e0;transition:all 0.4s;">
+                <div id="mailSpinner" style="width:38px;height:38px;border:4px solid #f3f3f3;border-top:4px solid var(--secondary);border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 10px;"></div>
+                <p id="mailStatusTitle" style="font-size:13px;font-weight:bold;color:var(--primary);margin:0 0 4px;"></p>
+                <p id="mailStatusSub" style="font-size:11px;color:#7f8c8d;margin:0;"></p>
+            </div>
+            <!-- Dosya listesi -->
+            <div id="mailFileList" style="max-height:130px;overflow-y:auto;margin-bottom:12px;display:none;background:#f8f9fa;border-radius:8px;padding:8px;border:1px solid #e9ecef;"></div>
+            <!-- Aksiyon butonları — JS tarafından doldurulur -->
+            <div id="mailActionBtns" style="display:none;"></div>
+        </div>
+
+        <!-- PANEL 3: Tamamlandı -->
+        <div id="mailPanel3" style="display:none;">
+            <div id="mailDoneBox" style="border-radius:10px;padding:16px;margin-bottom:14px;border:1px solid #a9dfbf;background:#eafaf1;">
+                <div style="font-size:26px;margin-bottom:8px;">&#9989;</div>
+                <p id="mailDoneTitle" style="font-size:13px;font-weight:bold;color:#155724;margin:0 0 5px;"></p>
+                <p id="mailDoneSub" style="font-size:11px;color:#27ae60;margin:0;"></p>
+            </div>
+            <div id="mailDoneActions"></div>
+            <button class="sl-btn" style="background:#7f8c8d;width:100%;margin-top:6px;" onclick="closeMailModal()">Kapat</button>
         </div>
     </div>
 </div>
@@ -1229,20 +1266,207 @@ async function downloadAllAsZip() {
 }
 
 // ============================================================
-//  MAİL
+//  MAİL  — Kopyalama başarısızsa otomatik ZIP + mailto akışı
 // ============================================================
+let _mailFiles   = [];   // { name, base64, type }
+let _mailAddress = '';
+let _mailZipBlob = null; // İndirilen ZIP blob'u (adım 3'te tekrar indirilebilsin)
+let _mailZipName = '';
+
 function openMailModal() {
     const ch = document.querySelectorAll('.summary-file-row.checked').length;
-    document.getElementById('mailCheckedInfo').innerText = ch > 0 ? `${ch} işaretli evrak gönderilecek` : 'Tüm evraklar gönderilecek';
-    document.getElementById('mailAddressInput').value = "";
+    document.getElementById('mailCheckedInfo').innerText = ch > 0
+        ? ch + ' işaretli evrak gönderilecek'
+        : 'Tüm evraklar gönderilecek';
+    document.getElementById('mailAddressInput').value = '';
+    _mailFiles = []; _mailAddress = ''; _mailZipBlob = null;
+    _mailStep(1);
     document.getElementById('mailModal').style.display = 'flex';
 }
-function closeMailModal() { document.getElementById('mailModal').style.display = 'none'; }
-function sendMail() {
+
+function closeMailModal() {
+    document.getElementById('mailModal').style.display = 'none';
+    _mailFiles = []; _mailAddress = ''; _mailZipBlob = null;
+}
+
+function _mailStep(n) {
+    for (let i = 1; i <= 3; i++) {
+        const s = document.getElementById('mailStep' + i);
+        const p = document.getElementById('mailPanel' + i);
+        if (s) { s.style.background = i === n ? 'var(--secondary)' : '#e9ecef'; s.style.color = i === n ? 'white' : '#999'; }
+        if (p) p.style.display = i === n ? 'block' : 'none';
+    }
+}
+
+function _mailStatus(title, sub, spinnerOn, boxColor, borderColor) {
+    const box = document.getElementById('mailStatusBox');
+    const sp  = document.getElementById('mailSpinner');
+    if (box) { box.style.background = boxColor || '#f8f9fa'; box.style.borderColor = borderColor || '#e0e0e0'; }
+    if (sp)  sp.style.display = spinnerOn ? 'block' : 'none';
+    const t = document.getElementById('mailStatusTitle'); if (t) { t.innerHTML = title; t.style.color = boxColor === '#eafaf1' ? '#155724' : boxColor === '#fff8e1' ? '#856404' : 'var(--primary)'; }
+    const s = document.getElementById('mailStatusSub');  if (s) s.innerText = sub || '';
+}
+
+async function sendMail() {
     const mail = document.getElementById('mailAddressInput').value.trim();
-    if (!mail || !mail.includes('@')) { showNotification("Geçerli e-posta adresi girin!"); return; }
-    closeMailModal();
-    showNotification(`✉️ Mail ${mail} adresine gönderildi.`, 'success');
+    if (!mail || !mail.includes('@')) { showNotification('Geçerli e-posta adresi girin!'); return; }
+    _mailAddress = mail;
+    _mailStep(2);
+
+    // --- Dosyaları topla ---
+    _mailStatus('Dosyalar derleniyor...', '', true);
+    document.getElementById('mailFileList').style.display = 'none';
+    document.getElementById('mailActionBtns').style.display = 'none';
+    await new Promise(r => setTimeout(r, 200));
+
+    const checkedRows = document.querySelectorAll('.summary-file-row.checked');
+    let keys = [];
+    if (checkedRows.length > 0) {
+        checkedRows.forEach(r => keys.push(r.dataset.key));
+    } else {
+        const customer = document.getElementById('summaryCustomerSelect')?.value;
+        const year     = document.getElementById('summaryYearSelect')?.value;
+        fileStore.forEach((data, key) => { if (data.customer === customer && data.year === year) keys.push(key); });
+    }
+
+    if (!keys.length) {
+        _mailStatus('⚠️ Gönderilecek evrak bulunamadı.', 'Lütfen önce evrak seçin.', false, '#fff8e1', '#ffc107');
+        return;
+    }
+
+    _mailFiles = [];
+    for (let i = 0; i < keys.length; i++) {
+        const data = fileStore.get(keys[i]);
+        if (!data) continue;
+        _mailFiles.push({ name: data.name, base64: data.base64, type: data.type });
+        document.getElementById('mailStatusSub').innerText = (i + 1) + ' / ' + keys.length + ' dosya işlendi';
+        await new Promise(r => setTimeout(r, 50));
+    }
+
+    // --- Dosya listesini göster ---
+    const listEl = document.getElementById('mailFileList');
+    listEl.innerHTML = _mailFiles.map((f, i) =>
+        '<div style="font-size:11px;padding:4px 5px;border-bottom:1px solid #eee;display:flex;align-items:center;gap:6px;">' +
+        '<span style="color:var(--secondary);font-weight:bold;flex-shrink:0;">' + (i+1) + '.</span>' +
+        '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--primary);">&#128196; ' + f.name + '</span></div>'
+    ).join('');
+    listEl.style.display = 'block';
+
+    // --- Panoya kopyalamayı dene ---
+    _mailStatus('Dosya listesi panoya kopyalanıyor...', 'Lütfen bekleyin...', true);
+    await new Promise(r => setTimeout(r, 300));
+
+    const clipText =
+        'Gönderilen Evraklar (' + _mailFiles.length + ' dosya):\n' +
+        '----------------------------------------\n' +
+        _mailFiles.map((f, i) => (i+1) + '. ' + f.name).join('\n') + '\n\n' +
+        'Gönderen: Beyanname Takip Portalı\nTarih: ' + new Date().toLocaleDateString('tr-TR');
+
+    let copied = false;
+    try {
+        await navigator.clipboard.writeText(clipText);
+        copied = true;
+    } catch (e1) {
+        try {
+            const ta = document.createElement('textarea');
+            ta.value = clipText;
+            ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
+            document.body.appendChild(ta); ta.focus(); ta.select();
+            copied = document.execCommand('copy');
+            document.body.removeChild(ta);
+        } catch (e2) { copied = false; }
+    }
+
+    await new Promise(r => setTimeout(r, 300));
+
+    if (copied) {
+        // ✅ KOPYALAMA BAŞARILI — mailto ile mail aç
+        _mailStatus('&#9989; Dosya listesi panoya kopyalandı!',
+            _mailFiles.length + ' dosya adı kopyalandı. Mail gövdesine yapıştırabilirsiniz.',
+            false, '#eafaf1', '#a9dfbf');
+        document.getElementById('mailActionBtns').innerHTML =
+            '<button class="sl-btn" style="background:var(--success);width:100%;margin-bottom:7px;" onclick="mailOpenClient(true)">&#128236; Mail Uygulamasını Aç</button>' +
+            '<button class="sl-btn" style="background:var(--secondary);width:100%;" onclick="mailDownloadZip()">&#128230; ZIP İndir (Mail\'e Ekle)</button>';
+        document.getElementById('mailActionBtns').style.display = 'block';
+    } else {
+        // ❌ KOPYALAMA BAŞARISIZ — Otomatik ZIP indir ve mailto aç
+        _mailStatus('&#9888;&#65039; Pano erişimi reddedildi — ZIP indiriliyor...', 'Dosyalar ZIP olarak hazırlanıyor, lütfen bekleyin...', true, '#fff8e1', '#ffc107');
+        await new Promise(r => setTimeout(r, 200));
+
+        // ZIP oluştur + indir
+        const zip = new JSZip();
+        _mailFiles.forEach(f => zip.file(f.name, base64ToUint8(f.base64)));
+        _mailZipBlob = await zip.generateAsync({ type: 'blob' });
+        _mailZipName = 'evraklar_' + new Date().toLocaleDateString('tr-TR').replace(/\./g, '-') + '.zip';
+
+        // ZIP'i indir
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(_mailZipBlob);
+        a.download = _mailZipName;
+        a.click();
+
+        await new Promise(r => setTimeout(r, 600));
+
+        _mailStatus('&#128230; ZIP indirildi! Şimdi mail uygulamanız açılıyor...',
+            '"' + _mailZipName + '" dosyasını indirdikten sonra mail\'e ek olarak ekleyin.',
+            false, '#e8f4fd', '#aed6f1');
+
+        // mailto aç — 800ms sonra
+        await new Promise(r => setTimeout(r, 800));
+        mailOpenClient(false); // false = kopyalama olmadı, ZIP ile devam
+    }
+}
+
+function mailOpenClient(hasCopy) {
+    const subject = encodeURIComponent('Beyanname Evraklari - ' + _mailFiles.length + ' Dosya');
+    const bodyLines = _mailFiles.map((f, i) => (i+1) + '. ' + f.name).join('\n');
+    const paste = hasCopy ? '\n\n[Dosya listesi panonuzda, buraya yapıştırın]\n' : '';
+    const zipNote = hasCopy ? '' : '\n\n[ZIP dosyası (' + _mailZipName + ') bilgisayarınıza indirildi. Lütfen bu maile ek olarak ekleyin.]';
+    const body = encodeURIComponent(
+        'Sayın İlgili,\n\nAşağıdaki evraklar ekte gönderilmektedir:\n\n' +
+        bodyLines + paste + zipNote +
+        '\n\nToplam: ' + _mailFiles.length + ' dosya\nTarih: ' + new Date().toLocaleDateString('tr-TR') +
+        '\n\nSaygılarımla,\nBeyanname Takip Portalı'
+    );
+    window.location.href = 'mailto:' + _mailAddress + '?subject=' + subject + '&body=' + body;
+
+    // Adım 3 — tamamlandı
+    setTimeout(function() {
+        _mailStep(3);
+        document.getElementById('mailDoneTitle').innerText = hasCopy
+            ? 'Mail uygulaması açıldı!'
+            : 'ZIP indirildi ve mail uygulaması açıldı!';
+        document.getElementById('mailDoneSub').innerText = hasCopy
+            ? 'Dosya listesi panonuzda. Mail gövdesine yapıştırın ve ZIP\'i ekleyin.'
+            : _mailZipName + ' dosyasını indirdikten sonra açılan maile ek olarak ekleyin.';
+        const acts = document.getElementById('mailDoneActions');
+        acts.innerHTML = '';
+        if (hasCopy) {
+            acts.innerHTML += '<button class="sl-btn" style="background:var(--secondary);width:100%;margin-bottom:7px;" onclick="mailDownloadZip()">&#128230; ZIP İndir (Mail\'e Ekle)</button>';
+        } else {
+            acts.innerHTML += '<button class="sl-btn" style="background:var(--secondary);width:100%;margin-bottom:7px;" onclick="mailDownloadZipAgain()">&#128230; ZIP\'i Tekrar İndir</button>';
+        }
+    }, 900);
+}
+
+async function mailDownloadZip() {
+    if (!_mailFiles.length) { showNotification('Dosya bulunamadı!'); return; }
+    showNotification('ZIP hazırlanıyor...', 'success');
+    const zip = new JSZip();
+    _mailFiles.forEach(f => zip.file(f.name, base64ToUint8(f.base64)));
+    const blob = await zip.generateAsync({ type: 'blob' });
+    _mailZipBlob = blob;
+    _mailZipName = 'evraklar_' + new Date().toLocaleDateString('tr-TR').replace(/\./g, '-') + '.zip';
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = _mailZipName; a.click();
+    showNotification(_mailFiles.length + ' evrak ZIP olarak indirildi.', 'success');
+}
+
+function mailDownloadZipAgain() {
+    if (!_mailZipBlob) { showNotification('ZIP bulunamadı, tekrar deneyin.'); return; }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(_mailZipBlob); a.download = _mailZipName; a.click();
+    showNotification('ZIP tekrar indirildi.', 'success');
 }
 
 // ============================================================
