@@ -248,30 +248,44 @@
                 padding-bottom: 70px;
             }
 
-            /* HEADER - sticky, kompakt */
+            /* HEADER - mobilde 2 satır */
             .header {
                 position: sticky;
                 top: 0;
                 z-index: 100;
                 border-radius: 0 !important;
                 margin-bottom: 0 !important;
-                padding: 8px 10px;
-                gap: 6px;
+                padding: 8px 10px 8px 10px;
+                flex-wrap: wrap;
+                gap: 4px;
+                row-gap: 6px;
             }
+            /* 1. satır: Geri butonu + isim - tam genişlik */
             .header > div:first-child {
-                gap: 6px;
-                min-width: 0;
-                flex: 1;
+                flex: 0 0 100%;
+                width: 100%;
+                gap: 8px;
+                align-items: center;
             }
             .header > div:first-child strong {
-                font-size: 13px;
+                font-size: 15px;
                 white-space: nowrap;
                 overflow: hidden;
                 text-overflow: ellipsis;
-                max-width: 110px;
-                display: inline-block;
             }
-            .upload-controls { gap: 5px; flex-shrink: 0; }
+            /* 2. satır: Upload butonları - tam genişlik */
+            .upload-controls {
+                flex: 0 0 100%;
+                width: 100%;
+                gap: 6px;
+                justify-content: flex-start;
+            }
+            .upload-controls .quick-upload-btn {
+                flex: 1;
+                text-align: center;
+                padding: 9px 4px;
+                font-size: 11px;
+            }
 
             /* GRID - 7 kolondan dikey listeye */
             .grid-wrapper {
