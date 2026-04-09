@@ -465,6 +465,7 @@
 
 <input type="file" id="ozlukInput" multiple accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="processOzlukFiles(event)">
 <input type="file" id="singleReplaceInput" style="display:none" onchange="replaceFile(event)">
+<input type="file" id="manualPdfInput" accept=".pdf" style="display:none" onchange="processManualPdf(event)">
 
 <div id="pdfPreviewContainer" style="position:fixed;width:700px;height:85%;background:white;display:none;flex-direction:column;z-index:20000;top:50%;left:50%;transform:translate(-50%,-50%);border-radius:12px;box-shadow:0 0 60px rgba(0,0,0,0.6);overflow:hidden;">
     <div style="padding:12px;background:var(--primary);color:white;display:flex;justify-content:space-between;align-items:center;">
@@ -788,6 +789,20 @@ function detectGeciciDonem(ft) {
     return null;
 }
 
+/**
+ * PDF metninde activeCustomer adını arar.
+ * Ad ve soyadı ayrı ayrı kelimelere bölerek her birinin metinde geçip geçmediğini kontrol eder.
+ * Dönüş: true = mükellef eşleşiyor, false = eşleşmiyor
+ */
+function checkMukellefAdi(ft) {
+    if (!activeCustomer) return true; // müşteri seçili değilse geç
+    // Müşteri adını büyük harfe çevir ve kelimelere böl (en az 3 karakter olanlar)
+    const kelimeler = activeCustomer.toLocaleUpperCase('tr-TR').split(/\s+/).filter(k => k.length >= 3);
+    if (kelimeler.length === 0) return true;
+    // Her kelimenin PDF metninde geçmesi gerekiyor
+    return kelimeler.every(k => ft.includes(k));
+}
+
 async function processSmartPdfs(e) {
     const allFiles = Array.from(e.target.files);
     if (!allFiles.length) return;
@@ -825,6 +840,15 @@ async function processSmartPdfs(e) {
 
         const ft = analysis.fullText;
         let placed = false;
+
+        // ─────────────────────────────────────────────
+        // MÜKELLEF ADI KONTROLÜ
+        // ─────────────────────────────────────────────
+        if (!checkMukellefAdi(ft)) {
+            showNotification(`⛔ "${file.name}" — Yüklemeye çalışılan beyannameler bu mükellefe ait değil!`, 'error');
+            unmatched++;
+            continue;
+        }
 
         // ─────────────────────────────────────────────
         // KURAL 2 — KDV Beyannamesi
@@ -899,8 +923,8 @@ async function processSmartPdfs(e) {
             }
         }
 
-        // KURAL 5 — Geçici Vergi Tahakkuku
-        else if (ft.includes('GELİR GEÇİCİ VERGİ') || ft.includes('KURUMLAR GEÇİCİ VERGİ')) {
+        // KURAL 5 — Geçici Vergi Tahakkuku (Gelir, Kurumlar, Kurum)
+        else if (ft.includes('GELİR GEÇİCİ VERGİ') || ft.includes('KURUMLAR GEÇİCİ VERGİ') || ft.includes('KURUM GEÇİCİ VERGİ')) {
             const don = detectDonemFromRange(ft);
             if (don) {
                 await targetBtn('#gecici-list', don, 2, file, 'Gecici', donemler[don - 1]);
@@ -990,8 +1014,11 @@ async function saveFileToBtn(btn, file, category='', subLabel='') {
 
 function handleSmartClick(e, target, isOzluk = false) {
     e.stopPropagation(); currentBtn = target; isOzlukCurrent = isOzluk;
-    const key = isOzluk ? target.getAttribute('data-id') : `${target.id}-${activeYear}`;
-    if (!isOzluk && !target.classList.contains('filled')) { document.getElementById('singleReplaceInput').click(); return; }
+    if (!isOzluk && !target.classList.contains('filled')) {
+        // Manuel yükleme: PDF analiz edilerek doğrulanacak
+        document.getElementById('manualPdfInput').click();
+        return;
+    }
     const rect = target.getBoundingClientRect();
     const menu = document.getElementById('miniMenu');
     menu.style.display = 'flex';
@@ -1004,8 +1031,119 @@ function handleSmartClick(e, target, isOzluk = false) {
     }
 }
 
+/**
+ * Manuel buton tıklamasıyla yüklenen PDF'i analiz eder.
+ * - Mükellef adı kontrolü yapar
+ * - PDF'in doğru kategoriye ait olup olmadığını kontrol eder
+ * - Uyuyorsa o butona yükler, uymuyorsa uyarı verir
+ */
+async function processManualPdf(e) {
+    const file = e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+        showNotification('⛔ Yalnızca PDF dosyası yüklenebilir!', 'error');
+        return;
+    }
+
+    const analysis = await analyzePdf(file);
+    if (!analysis) {
+        showNotification(`⚠️ PDF okunamadı: ${file.name}`, 'error');
+        return;
+    }
+    const ft = analysis.fullText;
+
+    // Mükellef adı kontrolü
+    if (!checkMukellefAdi(ft)) {
+        showNotification(`⛔ Yüklemeye çalışılan beyannameler bu mükellefe ait değil!`, 'error');
+        return;
+    }
+
+    // Butonun bağlı olduğu kategoriyi tespit et
+    const btn = currentBtn;
+    const btnItem = btn.closest('.btn-item');
+    const wrappers = btnItem.querySelectorAll('.file-btn-wrapper');
+    let btnPos = 1;
+    wrappers.forEach((w, i) => { if (w.contains(btn)) btnPos = i + 1; });
+    const isTahakkuk = btnPos === 2;
+    const parentId = btn.closest('[id]')?.id || '';
+    const itemLabel = btnItem.querySelector('.item-label')?.innerText?.toLocaleUpperCase('tr-TR') || '';
+
+    // Beklenen kategoriyi belirle
+    let expectedCategory = null;
+    if (parentId === 'kdv-list')               expectedCategory = isTahakkuk ? 'KDV_TAH'        : 'KDV_BEY';
+    else if (parentId === 'muhtasar-ay-list')   expectedCategory = isTahakkuk ? 'MUHTASAR_AY_TAH': 'MUHTASAR_AY_BEY';
+    else if (parentId === 'muhtasar-donem-list')expectedCategory = isTahakkuk ? 'MUHTASAR3_TAH'  : 'MUHTASAR3_BEY';
+    else if (parentId === 'gecici-list')        expectedCategory = isTahakkuk ? 'GECICI_TAH'     : 'GECICI_BEY';
+    else if (parentId === 'yillik-list') {
+        if (itemLabel.includes('GELİR') || itemLabel.includes('GELIR'))
+            expectedCategory = isTahakkuk ? 'GELIR_TAH' : 'GELIR_BEY';
+        else
+            expectedCategory = isTahakkuk ? 'KURUM_TAH' : 'KURUM_BEY';
+    }
+    else if (parentId === 'mizan-list') expectedCategory = 'MIZAN';
+
+    // PDF içeriğine göre gerçek kategori
+    const realCategory = detectPdfCategory(ft);
+
+    if (expectedCategory && realCategory !== expectedCategory) {
+        const expectedLabel = categoryLabel(expectedCategory);
+        const realLabel = realCategory ? categoryLabel(realCategory) : 'Tanımlanamayan belge';
+        showNotification(`⛔ Hatalı yükleme! Bu butona "${expectedLabel}" yüklenmelidir. Yüklemeye çalıştığınız dosya: "${realLabel}"`, 'error');
+        return;
+    }
+
+    // Geçerli — kaydet
+    await saveFileToBtn(btn, file, realCategory || expectedCategory || '', itemLabel);
+    loadSummary();
+    showNotification(`✅ ${file.name} başarıyla yüklendi.`, 'success');
+}
+
+/** PDF metninden kategori kodu döner */
+function detectPdfCategory(ft) {
+    if (ft.includes('KATMA DEĞER VERGİSİ BEYANNAMESİ'))  return 'KDV_BEY';
+    if (ft.includes('GERÇEK USULDE KATMA DEĞER VERGİSİ')) return 'KDV_TAH';
+    if (ft.includes('MUHTASAR VE PRİM HİZMET BEYANNAMESİ')) {
+        return is3Aylik(ft) ? 'MUHTASAR3_BEY' : 'MUHTASAR_AY_BEY';
+    }
+    if (ft.includes('GELİR VERGİSİ S. (MUHTASAR)') || ft.includes('GELİR VERGİSİ S.(MUHTASAR)')) {
+        return detectDonemFromRange(ft) ? 'MUHTASAR3_TAH' : 'MUHTASAR_AY_TAH';
+    }
+    if (ft.includes('GEÇİCİ VERGİ BEYANNAMESİ'))  return 'GECICI_BEY';
+    if (ft.includes('GELİR GEÇİCİ VERGİ') || ft.includes('KURUMLAR GEÇİCİ VERGİ') || ft.includes('KURUM GEÇİCİ VERGİ')) return 'GECICI_TAH';
+    if (ft.includes('YILLIK GELİR VERGİSİ BEYANNAMESİ')) return 'GELIR_BEY';
+    if (ft.includes('YILLIK GELİR VERGİSİ') && !ft.includes('YILLIK GELİR VERGİSİ BEYANNAMESİ')) return 'GELIR_TAH';
+    if (ft.includes('KURUMLAR VERGİSİ BEYANNAMESİ')) return 'KURUM_BEY';
+    if (ft.includes('KURUMLAR VERGİSİ') && !ft.includes('KURUMLAR VERGİSİ BEYANNAMESİ')) return 'KURUM_TAH';
+    return null;
+}
+
+/** Kategori kodunu okunabilir etikete çevirir */
+function categoryLabel(code) {
+    const map = {
+        'KDV_BEY':'KDV Beyannamesi', 'KDV_TAH':'KDV Tahakkuku',
+        'MUHTASAR_AY_BEY':'Muhtasar Aylık Beyanname', 'MUHTASAR_AY_TAH':'Muhtasar Aylık Tahakkuk',
+        'MUHTASAR3_BEY':'Muhtasar 3 Aylık Beyanname', 'MUHTASAR3_TAH':'Muhtasar 3 Aylık Tahakkuk',
+        'GECICI_BEY':'Geçici Vergi Beyannamesi', 'GECICI_TAH':'Geçici Vergi Tahakkuku',
+        'GELIR_BEY':'Yıllık Gelir Vergisi Beyannamesi', 'GELIR_TAH':'Yıllık Gelir Vergisi Tahakkuku',
+        'KURUM_BEY':'Kurumlar Vergisi Beyannamesi', 'KURUM_TAH':'Kurumlar Vergisi Tahakkuku',
+        'MIZAN':'Mizan'
+    };
+    return map[code] || code;
+}
+
 async function replaceFile(e) {
     const file = e.target.files[0]; if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+        showNotification('⛔ Yalnızca PDF dosyası yüklenebilir!', 'error');
+        e.target.value = ""; return;
+    }
+    const analysis = await analyzePdf(file);
+    if (analysis && !checkMukellefAdi(analysis.fullText)) {
+        showNotification('⛔ Yüklemeye çalışılan beyannameler bu mükellefe ait değil!', 'error');
+        e.target.value = ""; return;
+    }
     await saveFileToBtn(currentBtn, file); e.target.value = ""; loadSummary();
 }
 
