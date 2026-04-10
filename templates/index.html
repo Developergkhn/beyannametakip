@@ -288,13 +288,14 @@
             <select id="summaryCustomerSelect" onchange="loadSummary()"></select>
             <label class="mgmt-label">Yıl:</label>
             <select id="summaryYearSelect" onchange="loadSummary()"></select>
-            <button class="sl-btn" style="background:var(--secondary);" onclick="loadSummary()">🔍 Görüntüle</button>
+
             <div class="action-section">
                 <h4>İşlemler</h4>
                 <button class="sl-btn" style="background:var(--primary);" onclick="goToSelectionScreen()">⚙️ Beyanname Paneli</button>
                 <button class="sl-btn" style="background:#27ae60;" onclick="downloadCheckedAsZip()">📦 İşaretlileri ZİP Olarak İndir</button>
                 <button class="sl-btn" style="background:#16a085;" onclick="downloadAllAsZip()">📥 Tümünü ZİP Olarak İndir</button>
                 <button class="sl-btn" style="background:var(--secondary);" onclick="openMailModal()">✉️ Mail Gönder</button>
+                <button class="sl-btn" style="background:#25D366;" onclick="openWhatsappModal()">💬 WhatsApp ile Gönder</button>
             </div>
         </div>
         <div class="summary-right">
@@ -356,7 +357,9 @@
         </div>
         <div class="mgmt-box">
             <label class="mgmt-label">Çalışma Yılı Yönetimi:</label>
-            <div style="display:flex;gap:5px;margin-bottom:10px;"><input type="number" id="newYearInput" placeholder="Örn: 2026" style="margin-bottom:0;flex:2;"><button class="quick-upload-btn" style="background:var(--secondary);flex:1;" onclick="addNewYear()">Ekle</button></div>
+            <div style="font-size:10px;color:#7f8c8d;margin-bottom:6px;">Yalnızca geçen yıl, bu yıl ve gelecek yıl eklenebilir.</div>
+            <div id="yearInputMsg" style="display:none;padding:6px 10px;border-radius:6px;font-size:11px;font-weight:bold;margin-bottom:8px;"></div>
+            <div style="display:flex;gap:5px;margin-bottom:10px;"><input type="number" id="newYearInput" placeholder="Örn: 2026" style="margin-bottom:0;flex:2;" oninput="validateYearInput()"><button class="quick-upload-btn" style="background:var(--secondary);flex:1;" onclick="addNewYear()">Ekle</button></div>
             <div style="display:flex;gap:5px;">
                 <select id="mgmtYearList" style="margin-bottom:0;flex:2;padding:5px;font-size:12px;"></select>
                 <button class="quick-upload-btn" style="background:var(--danger);flex:1;" onclick="toggleActionPanel('yearDelete')">Sil</button>
@@ -383,6 +386,7 @@
         <div class="upload-controls">
             <button class="quick-upload-btn" style="background:var(--secondary);" onclick="openSmartModal()">📄 Beyanname & Tahakkuk Yükle</button>
             <button class="quick-upload-btn" style="background:var(--purple);" onclick="document.getElementById('ozlukInput').click()">👤 Özlük Ekle</button>
+            <button class="quick-upload-btn" style="background:#c0392b;" onclick="clearAllDocuments()">🗑️ Tüm Belgeleri Sil</button>
             <button class="quick-upload-btn" style="background:var(--danger);" onclick="location.reload()">🚪 Çıkış</button>
         </div>
     </div>
@@ -463,7 +467,39 @@
     </div>
 </div>
 
-<input type="file" id="ozlukInput" multiple accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="processOzlukFiles(event)">
+<!-- WHATSAPP MODALI -->
+<div id="whatsappModal" class="modal-overlay">
+    <div class="modal-content" style="width:420px;max-width:100%;">
+        <button onclick="closeWhatsappModal()" style="position:absolute;right:15px;top:15px;border:none;background:none;font-size:24px;cursor:pointer;z-index:1;">&times;</button>
+        <h3 style="color:#25D366;margin-top:0;">💬 WhatsApp ile Gönder</h3>
+        <p style="font-size:11px;color:#666;margin-bottom:14px;">Dosyalar ZIP olarak indirilir. Ardından WhatsApp Web açılır — eki manuel olarak ekleyip gönderebilirsiniz.</p>
+        <div id="waStep1">
+            <label style="font-size:11px;font-weight:bold;color:var(--primary);display:block;margin-bottom:6px;text-align:left;">Alıcı Adı veya Telefon No (WhatsApp):</label>
+            <input type="text" id="waContactInput" placeholder="örn: Ahmet Yılmaz veya +90 555 000 0000" style="width:100%;padding:11px 12px;border-radius:8px;border:1px solid #ddd;margin-bottom:14px;font-size:14px;">
+            <div style="display:flex;gap:8px;">
+                <button class="sl-btn" style="background:#25D366;flex:2;" onclick="sendWhatsapp()">Devam Et &#8594;</button>
+                <button class="sl-btn" style="background:#7f8c8d;flex:1;" onclick="closeWhatsappModal()">İptal</button>
+            </div>
+        </div>
+        <div id="waStep2" style="display:none;text-align:center;padding:10px 0;">
+            <div id="waSpinner" class="spinner" style="width:40px;height:40px;border-width:4px;margin:0 auto 12px;"></div>
+            <p id="waStatusText" style="font-size:13px;font-weight:bold;color:var(--primary);margin:0 0 6px;"></p>
+            <p id="waSubText" style="font-size:11px;color:#7f8c8d;margin:0;"></p>
+        </div>
+        <div id="waStep3" style="display:none;">
+            <div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:10px;padding:14px;margin-bottom:14px;text-align:center;">
+                <div style="font-size:26px;margin-bottom:6px;">✅</div>
+                <p style="font-size:13px;font-weight:bold;color:#1b5e20;margin:0 0 4px;">ZIP indirildi!</p>
+                <p id="waInstruction" style="font-size:11px;color:#2e7d32;margin:0;"></p>
+            </div>
+            <button class="sl-btn" style="background:#25D366;width:100%;margin-bottom:7px;" onclick="openWhatsappWeb()">📱 WhatsApp Web'i Aç</button>
+            <button class="sl-btn" style="background:#7f8c8d;width:100%;" onclick="closeWhatsappModal()">Kapat</button>
+        </div>
+    </div>
+</div>
+
+<input type="file" id="ozlukInput" multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx" style="display:none" onchange="processOzlukFiles(event)">
+<input type="file" id="mizanInput" multiple accept=".pdf,.xls,.xlsx" style="display:none" onchange="processMizanFiles(event)">
 <input type="file" id="singleReplaceInput" style="display:none" onchange="replaceFile(event)">
 <input type="file" id="manualPdfInput" accept=".pdf" style="display:none" onchange="processManualPdf(event)">
 
@@ -715,6 +751,46 @@ async function restoreButtonsFromDB(customer, year) {
 // ============================================================
 
 /**
+ * PDF metnindeki beyanname yılını tespit eder.
+ * Format: 4 haneli yıl rakamı arar.
+ */
+function detectPdfYear(ft) {
+    // "2025
+OCAK" veya "2026 ŞUBAT" gibi formatlarda yılı ara
+    const m = ft.match(/(20\d{2})/);
+    return m ? parseInt(m[1], 10) : null;
+}
+
+/**
+ * PDF metnindeki tahakkuk dönem yılını tespit eder.
+ * "VERGİLENDİRME DÖNEMİ" başlığının altındaki yıl ya da MM/YYYY formatındaki yıl.
+ */
+function detectTahakkukYear(ft) {
+    // MM/YYYY-MM/YYYY formatındaki yıl
+    const m1 = ft.match(/\d{2}\/(20\d{2})/);
+    if (m1) return parseInt(m1[1], 10);
+    // Genel 4 haneli yıl
+    const m2 = ft.match(/(20\d{2})/);
+    return m2 ? parseInt(m2[1], 10) : null;
+}
+
+/**
+ * Yıl kontrolü — PDF yılı ile aktif yıl uyuşmuyorsa uyarı verir.
+ * isTahakkuk: true ise tahakkuk yılı, false ise beyanname yılı.
+ * Dönüş: true = OK, false = yıl uyuşmuyor (reddedilmeli).
+ */
+function checkPdfYear(ft, isTahakkuk) {
+    const pdfYear = isTahakkuk ? detectTahakkukYear(ft) : detectPdfYear(ft);
+    if (!pdfYear) return true; // yıl tespit edilemiyorsa geçir
+    const aktifYil = parseInt(activeYear, 10);
+    if (pdfYear !== aktifYil) {
+        showNotification(`⛔ PDF yılı (${pdfYear}) ile çalışma yılı (${aktifYil}) uyuşmuyor!`, 'error');
+        return false;
+    }
+    return true;
+}
+
+/**
  * PDF metninden beyanname ayını tespit eder.
  * Örnek format: "2026\nŞubat" veya "2026 ŞUBAT" gibi.
  * Dönüş: 1-12 (ay index) veya null
@@ -846,6 +922,20 @@ async function processSmartPdfs(e) {
         // ─────────────────────────────────────────────
         if (!checkMukellefAdi(ft)) {
             showNotification(`⛔ "${file.name}" — Yüklemeye çalışılan beyannameler bu mükellefe ait değil!`, 'error');
+            unmatched++;
+            continue;
+        }
+
+        // ─────────────────────────────────────────────
+        // YIL KONTROLÜ
+        // ─────────────────────────────────────────────
+        // Tahakkuk mu beyanname mi olduğunu önceden belirle
+        const _isTah = ft.includes('GERÇEK USULDE KATMA DEĞER VERGİSİ') ||
+            ft.includes('GELİR VERGİSİ S. (MUHTASAR)') || ft.includes('GELİR VERGİSİ S.(MUHTASAR)') ||
+            ft.includes('GELİR GEÇİCİ VERGİ') || ft.includes('KURUMLAR GEÇİCİ VERGİ') || ft.includes('KURUM GEÇİCİ VERGİ') ||
+            (ft.includes('YILLIK GELİR VERGİSİ') && !ft.includes('YILLIK GELİR VERGİSİ BEYANNAMESİ')) ||
+            (ft.includes('KURUMLAR VERGİSİ') && !ft.includes('KURUMLAR VERGİSİ BEYANNAMESİ'));
+        if (!checkPdfYear(ft, _isTah)) {
             unmatched++;
             continue;
         }
@@ -1012,6 +1102,28 @@ async function saveFileToBtn(btn, file, category='', subLabel='') {
     if (xBtn) { xBtn.classList.add('active'); xBtn.onclick = e => removeFile(e, storageKey, false); }
 }
 
+async function clearAllDocuments() {
+    if (!confirm(`"${activeCustomer}" — ${activeYear} yılına ait TÜM belgeler silinecek. Emin misiniz?`)) return;
+    const keysToDelete = [];
+    fileStore.forEach((data, key) => {
+        if (data.customer === activeCustomer && data.year === activeYear) keysToDelete.push(key);
+    });
+    for (const key of keysToDelete) {
+        fileStore.delete(key);
+        await deleteFileFromDB(key);
+    }
+    // Butonları sıfırla
+    document.querySelectorAll('.file-btn').forEach(btn => {
+        btn.classList.remove('filled');
+        btn.innerText = btn.innerText.replace(' ✅','');
+        const xBtn = btn.parentElement?.querySelector('.btn-del-x');
+        if (xBtn) xBtn.classList.remove('active');
+    });
+    document.getElementById('ozluk-list-container').innerHTML = '';
+    loadSummary();
+    showNotification(`✅ Tüm belgeler silindi.`, 'success');
+}
+
 function handleSmartClick(e, target, isOzluk = false) {
     e.stopPropagation(); currentBtn = target; isOzlukCurrent = isOzluk;
     if (!isOzluk && !target.classList.contains('filled')) {
@@ -1059,6 +1171,10 @@ async function processManualPdf(e) {
         showNotification(`⛔ Yüklemeye çalışılan beyannameler bu mükellefe ait değil!`, 'error');
         return;
     }
+
+    // Yıl kontrolü
+    const _mIsTah = (btnPos === 2);
+    if (!checkPdfYear(ft, _mIsTah)) return;
 
     // Butonun bağlı olduğu kategoriyi tespit et
     const btn = currentBtn;
@@ -1147,9 +1263,39 @@ async function replaceFile(e) {
     await saveFileToBtn(currentBtn, file); e.target.value = ""; loadSummary();
 }
 
+// ── Madde 10: Mizan dosyaları ─────────────────────────────────────────────
+async function processMizanFiles(e) {
+    const allowed = ['.pdf','.xls','.xlsx'];
+    for (const file of Array.from(e.target.files)) {
+        const ext = '.' + file.name.split('.').pop().toLowerCase();
+        if (!allowed.includes(ext)) {
+            showNotification(`⛔ "${file.name}" — Mizan için yalnızca PDF veya Excel dosyası yüklenebilir!`, 'error');
+            continue;
+        }
+        // Excel dosyalarında mizan kelimesini kontrol edemeyiz (binary), PDF'lerde kontrol et
+        if (ext === '.pdf') {
+            const analysis = await analyzePdf(file);
+            if (analysis && !analysis.fullText.includes('MİZAN') && !analysis.fullText.includes('MIZAN')) {
+                showNotification(`⚠️ "${file.name}" — PDF içinde "MİZAN" kelimesi bulunamadı!`, 'warning');
+                continue;
+            }
+        }
+        if (currentBtn) await saveFileToBtn(currentBtn, file, 'Mizan', '');
+    }
+    e.target.value = '';
+    loadSummary();
+}
+
+// ── Madde 11: Özlük dosyaları ─────────────────────────────────────────────
 async function processOzlukFiles(e) {
+    const allowed = ['.pdf','.jpg','.jpeg','.png','.doc','.docx','.xls','.xlsx'];
     const container = document.getElementById('ozluk-list-container');
     for (const file of Array.from(e.target.files)) {
+        const ext = '.' + file.name.split('.').pop().toLowerCase();
+        if (!allowed.includes(ext)) {
+            showNotification(`⛔ "${file.name}" — Özlük için geçersiz dosya tipi! PDF, resim veya Office dosyası yükleyin.`, 'error');
+            continue;
+        }
         const id = "oz-" + Math.random().toString(36).substr(2, 9) + "-" + activeYear;
         const base64 = await fileToBase64(file);
         const data = { name: file.name.toUpperCase(), base64, type: file.type, customer: activeCustomer, year: activeYear, category: 'Ozluk', subLabel: '' };
@@ -1210,14 +1356,48 @@ function refreshSummaryLists() {
     const ys = document.getElementById('summaryYearSelect'); if (ys) { ys.innerHTML = ""; availableYears.sort((a,b)=>b-a).forEach(y => { const o = document.createElement('option'); o.value = o.innerText = y; ys.appendChild(o); }); }
 }
 function toggleActionPanel(id) {
+    if (id === '__close__') {
+        document.querySelectorAll('.dynamic-action-panel').forEach(p => p.style.display = 'none');
+        return;
+    }
     document.querySelectorAll('.dynamic-action-panel').forEach(p => { if (p.id !== 'panel-' + id) p.style.display = 'none'; });
-    const t = document.getElementById('panel-' + id); t.style.display = t.style.display === 'block' ? 'none' : 'block';
+    const t = document.getElementById('panel-' + id); if(t) t.style.display = t.style.display === 'block' ? 'none' : 'block';
 }
 function addCustomer() { const i = document.getElementById('newCustomerName'); const n = i.value.trim().toUpperCase(); if (!n) return; customers.push(n); i.value = ""; refreshCustomerList(); refreshSummaryLists(); showMgmtMessage("Müşteri eklendi."); }
-function addNewYear() { const i = document.getElementById('newYearInput'); if (!i.value) return; availableYears.push(i.value); i.value = ""; refreshYearList(); refreshSummaryLists(); showMgmtMessage("Yıl eklendi."); }
+function validateYearInput() {
+    const i = document.getElementById('newYearInput');
+    const msg = document.getElementById('yearInputMsg');
+    if (!i.value || !msg) return;
+    const val = parseInt(i.value, 10);
+    const now = new Date().getFullYear();
+    if (val < now - 1 || val > now + 1) {
+        msg.style.display = 'block';
+        msg.style.background = '#f8d7da'; msg.style.color = '#721c24'; msg.style.border = '1px solid #f5c6cb';
+        msg.innerText = `⛔ Yalnızca ${now-1}, ${now} veya ${now+1} yılı eklenebilir.`;
+    } else {
+        msg.style.display = 'block';
+        msg.style.background = '#d4edda'; msg.style.color = '#155724'; msg.style.border = '1px solid #c3e6cb';
+        msg.innerText = `✅ Geçerli yıl.`;
+    }
+}
+function addNewYear() {
+    const i = document.getElementById('newYearInput');
+    if (!i.value) return;
+    const val = parseInt(i.value, 10);
+    const now = new Date().getFullYear();
+    if (val < now - 1 || val > now + 1) {
+        validateYearInput();
+        return;
+    }
+    if (availableYears.includes(String(val))) { showMgmtMessage("Bu yıl zaten mevcut.", "error"); i.value=""; return; }
+    availableYears.push(String(val));
+    i.value = "";
+    const msg = document.getElementById('yearInputMsg'); if(msg) msg.style.display='none';
+    refreshYearList(); refreshSummaryLists(); showMgmtMessage("Yıl eklendi.");
+}
 function confirmDeleteCustomer() { const s = document.getElementById('mgmtCustomerList').value; customers = customers.filter(c => c !== s); refreshCustomerList(); refreshSummaryLists(); toggleActionPanel('customerDelete'); showMgmtMessage("Müşteri silindi."); }
 function confirmDeleteYear() { const s = document.getElementById('mgmtYearList').value; availableYears = availableYears.filter(y => y !== s); refreshYearList(); refreshSummaryLists(); toggleActionPanel('yearDelete'); showMgmtMessage("Yıl silindi."); }
-function saveCustomerRename() { const o = document.getElementById('mgmtCustomerList').value; const n = document.getElementById('editCustomerInput').value.trim().toUpperCase(); if (!n) return; customers = customers.map(c => c === o ? n : c); refreshCustomerList(); refreshSummaryLists(); showMgmtMessage("İsim güncellendi."); }
+function saveCustomerRename() { const o = document.getElementById('mgmtCustomerList').value; const n = document.getElementById('editCustomerInput').value.trim().toUpperCase(); if (!n) return; customers = customers.map(c => c === o ? n : c); refreshCustomerList(); refreshSummaryLists(); toggleActionPanel('__close__'); showMgmtMessage("İsim güncellendi."); }
 function showMgmtMessage(msg, type='success') { const b = document.getElementById('mgmt-msg-box'); b.innerText = msg; b.className = `mgmt-msg ${type}`; b.style.display = 'block'; setTimeout(() => b.style.display = 'none', 3000); }
 
 async function finalizeAndShowPanel() {
@@ -1242,26 +1422,28 @@ function loadSummary() {
     renderGrid(cols, year);
 }
 
+// Birleşik kart tanımları: her kart beyanname+tahakkuk birlikte gösterir
 const COL_DEF = [
-    { key:'KDV Bey.',     cls:'kdv' },
-    { key:'KDV Tah.',     cls:'kdv' },
-    { key:'Muh.Ay Bey.',  cls:'muhtasar-ay' },
-    { key:'Muh.Ay Tah.',  cls:'muhtasar-ay' },
-    { key:'Muh.3 Bey.',   cls:'muhtasar-don' },
-    { key:'Muh.3 Tah.',   cls:'muhtasar-don' },
-    { key:'Gec.V. Bey.',  cls:'gecici' },
-    { key:'Gec.V. Tah.',  cls:'gecici' },
-    { key:'Gel.V. Bey.',  cls:'gelir' },
-    { key:'Gel.V. Tah.',  cls:'gelir' },
-    { key:'Kur.V. Bey.',  cls:'kurum' },
-    { key:'Kur.V. Tah.',  cls:'kurum' },
-    { key:'Mizanlar',     cls:'mizan' },
-    { key:'Özlük',        cls:'ozluk' },
+    { key:'KDV',         beyKey:'KDV Bey.',      tahKey:'KDV Tah.',      cls:'kdv' },
+    { key:'Muhtasar Ay', beyKey:'Muh.Ay Bey.',   tahKey:'Muh.Ay Tah.',   cls:'muhtasar-ay' },
+    { key:'Muhtasar 3A', beyKey:'Muh.3 Bey.',    tahKey:'Muh.3 Tah.',    cls:'muhtasar-don' },
+    { key:'Geçici V.',   beyKey:'Gec.V. Bey.',   tahKey:'Gec.V. Tah.',   cls:'gecici' },
+    { key:'Gelir V.',    beyKey:'Gel.V. Bey.',    tahKey:'Gel.V. Tah.',   cls:'gelir' },
+    { key:'Kurumlar V.', beyKey:'Kur.V. Bey.',   tahKey:'Kur.V. Tah.',   cls:'kurum' },
+    { key:'Mizanlar',    beyKey:'Mizanlar',       tahKey:null,            cls:'mizan' },
+    { key:'Özlük',       beyKey:'Özlük',          tahKey:null,            cls:'ozluk' },
+];
+// Eski tek-kolon haritası (buildCols için geriye dönük uyumluluk)
+const COL_KEYS_FLAT = [
+    'KDV Bey.','KDV Tah.','Muh.Ay Bey.','Muh.Ay Tah.',
+    'Muh.3 Bey.','Muh.3 Tah.','Gec.V. Bey.','Gec.V. Tah.',
+    'Gel.V. Bey.','Gel.V. Tah.','Kur.V. Bey.','Kur.V. Tah.',
+    'Mizanlar','Özlük'
 ];
 
 function buildCols(customer, year) {
     const cols = {};
-    COL_DEF.forEach(d => { cols[d.key] = { cls: d.cls, items: [] }; });
+    COL_KEYS_FLAT.forEach(k => { cols[k] = { cls: '', items: [] }; });
 
     fileStore.forEach((data, key) => {
         if (data.customer !== customer || data.year !== year) return;
@@ -1293,22 +1475,28 @@ function buildCols(customer, year) {
 function renderGrid(cols, year) {
     const content = document.getElementById('summaryContent');
     content.innerHTML = '';
-    let total = 0; Object.values(cols).forEach(c => total += c.items.length);
+    let total = 0; COL_KEYS_FLAT.forEach(k => { if(cols[k]) total += cols[k].items.length; });
     document.getElementById('summarySubInfo').innerText = `${year} · ${total} evrak`;
 
     const scroll = document.createElement('div'); scroll.className = 'summary-grid-scroll';
     const grid = document.createElement('div'); grid.className = 'summary-grid';
 
     COL_DEF.forEach(def => {
-        const col = cols[def.key];
-        const colDiv = document.createElement('div'); colDiv.className = `summary-col ${col.cls}`;
+        const beyItems = cols[def.beyKey]?.items || [];
+        const tahItems = def.tahKey ? (cols[def.tahKey]?.items || []) : [];
+        const totalCount = beyItems.length + tahItems.length;
 
+        const colDiv = document.createElement('div'); colDiv.className = `summary-col ${def.cls}`;
+        colDiv.style.width = '150px';
+
+        // Kart başlığı
         const header = document.createElement('div'); header.className = 'summary-col-header';
-        header.innerHTML = `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${def.key}</span><span class="col-count">${col.items.length}</span>`;
+        header.innerHTML = `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:bold;">${def.key}</span><span class="col-count">${totalCount}</span>`;
         colDiv.appendChild(header);
 
         const body = document.createElement('div'); body.className = 'summary-col-body';
 
+        // Tümünü seç satırı
         const saRow = document.createElement('div'); saRow.className = 'select-all-row';
         const saCb = document.createElement('input'); saCb.type = 'checkbox'; saCb.style.cssText = 'width:12px;height:12px;cursor:pointer;accent-color:var(--success);';
         saCb.onchange = function() { body.querySelectorAll('.summary-file-cb').forEach(cb => { cb.checked = this.checked; cb.closest('.summary-file-row').classList.toggle('checked', this.checked); }); };
@@ -1317,20 +1505,36 @@ function renderGrid(cols, year) {
         saRow.appendChild(saCb); saRow.appendChild(saLabel);
         body.appendChild(saRow);
 
-        if (col.items.length === 0) {
-            const empty = document.createElement('div'); empty.className = 'summary-empty'; empty.innerText = 'Evrak yok'; body.appendChild(empty);
-        } else {
-            col.items.forEach(item => {
-                const row = document.createElement('div'); row.className = 'summary-file-row'; row.dataset.key = item.key;
-                const cb = document.createElement('input'); cb.type = 'checkbox'; cb.className = 'summary-file-cb';
-                cb.onchange = function() { row.classList.toggle('checked', this.checked); };
-                const info = document.createElement('div'); info.className = 'summary-file-info';
-                info.innerHTML = (item.subLabel ? `<span class="summary-sub-label">${item.subLabel}</span>` : '') + `<span class="summary-file-name" title="${item.name}">📄 ${item.name}</span>`;
-                const tick = document.createElement('span'); tick.className = 'summary-file-tick'; tick.innerText = '✅';
-                row.appendChild(cb); row.appendChild(info); row.appendChild(tick);
-                body.appendChild(row);
-            });
+        function addSection(items, sectionLabel) {
+            if (def.tahKey && sectionLabel) {
+                const lbl = document.createElement('div');
+                lbl.style.cssText = 'font-size:8px;font-weight:bold;color:#fff;background:' + (sectionLabel==='Beyanname' ? 'var(--secondary)' : 'var(--success)') + ';padding:2px 5px;border-radius:3px;margin:4px 0 2px;';
+                lbl.innerText = sectionLabel;
+                body.appendChild(lbl);
+            }
+            if (items.length === 0) {
+                const empty = document.createElement('div'); empty.className = 'summary-empty'; empty.innerText = 'Evrak yok'; body.appendChild(empty);
+            } else {
+                items.forEach(item => {
+                    const row = document.createElement('div'); row.className = 'summary-file-row'; row.dataset.key = item.key;
+                    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.className = 'summary-file-cb';
+                    cb.onchange = function() { row.classList.toggle('checked', this.checked); };
+                    const info = document.createElement('div'); info.className = 'summary-file-info';
+                    info.innerHTML = (item.subLabel ? `<span class="summary-sub-label">${item.subLabel}</span>` : '') + `<span class="summary-file-name" title="${item.name}">📄 ${item.name}</span>`;
+                    const tick = document.createElement('span'); tick.className = 'summary-file-tick'; tick.innerText = '✅';
+                    row.appendChild(cb); row.appendChild(info); row.appendChild(tick);
+                    body.appendChild(row);
+                });
+            }
         }
+
+        if (def.tahKey) {
+            addSection(beyItems, 'Beyanname');
+            addSection(tahItems, 'Tahakkuk');
+        } else {
+            addSection(beyItems, null);
+        }
+
         colDiv.appendChild(body);
         grid.appendChild(colDiv);
     });
@@ -1486,8 +1690,8 @@ async function sendMail() {
             _mailFiles.length + ' dosya adı kopyalandı. Mail gövdesine yapıştırabilirsiniz.',
             false, '#eafaf1', '#a9dfbf');
         document.getElementById('mailActionBtns').innerHTML =
-            '<button class="sl-btn" style="background:var(--success);width:100%;margin-bottom:7px;" onclick="mailOpenClient(true)">&#128236; Mail Uygulamasını Aç</button>' +
-            '<button class="sl-btn" style="background:var(--secondary);width:100%;" onclick="mailDownloadZip()">&#128230; ZIP İndir (Mail\'e Ekle)</button>';
+            '<button class="sl-btn" style="background:var(--success);width:100%;margin-bottom:7px;" onclick="mailOpenClient(true)">&#128236; Mail ile Gönder</button>' +
+            '<button class="sl-btn" style="background:var(--secondary);width:100%;" onclick="mailDownloadZip()">&#128230; ZIP İndir (Mail Gönder)</button>';
         document.getElementById('mailActionBtns').style.display = 'block';
     } else {
         _mailStatus('&#9888;&#65039; Pano erişimi reddedildi — ZIP indiriliyor...', 'Dosyalar ZIP olarak hazırlanıyor, lütfen bekleyin...', true, '#fff8e1', '#ffc107');
@@ -1536,7 +1740,7 @@ function mailOpenClient(hasCopy) {
         const acts = document.getElementById('mailDoneActions');
         acts.innerHTML = '';
         if (hasCopy) {
-            acts.innerHTML += '<button class="sl-btn" style="background:var(--secondary);width:100%;margin-bottom:7px;" onclick="mailDownloadZip()">&#128230; ZIP İndir (Mail\'e Ekle)</button>';
+            acts.innerHTML += '<button class="sl-btn" style="background:var(--secondary);width:100%;margin-bottom:7px;" onclick="mailDownloadZip()">&#128230; ZIP İndir (Mail Gönder)</button>';
         } else {
             acts.innerHTML += '<button class="sl-btn" style="background:var(--secondary);width:100%;margin-bottom:7px;" onclick="mailDownloadZipAgain()">&#128230; ZIP\'i Tekrar İndir</button>';
         }
@@ -1561,6 +1765,89 @@ function mailDownloadZipAgain() {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(_mailZipBlob); a.download = _mailZipName; a.click();
     showNotification('ZIP tekrar indirildi.', 'success');
+}
+
+// ============================================================
+//  WHATSAPP
+// ============================================================
+let _waZipBlob = null, _waZipName = '', _waContact = '';
+
+function openWhatsappModal() {
+    const ch = document.querySelectorAll('.summary-file-row.checked').length;
+    document.getElementById('waContactInput').value = '';
+    document.getElementById('waStep1').style.display = 'block';
+    document.getElementById('waStep2').style.display = 'none';
+    document.getElementById('waStep3').style.display = 'none';
+    _waZipBlob = null; _waContact = '';
+    document.getElementById('whatsappModal').style.display = 'flex';
+}
+
+function closeWhatsappModal() {
+    document.getElementById('whatsappModal').style.display = 'none';
+}
+
+async function sendWhatsapp() {
+    const contact = document.getElementById('waContactInput').value.trim();
+    if (!contact) { showNotification('Alıcı bilgisi girin!'); return; }
+    _waContact = contact;
+
+    document.getElementById('waStep1').style.display = 'none';
+    document.getElementById('waStep2').style.display = 'block';
+    document.getElementById('waStatusText').innerText = 'Dosyalar ZIP'e ekleniyor...';
+    document.getElementById('waSubText').innerText = '';
+
+    // Dosyaları topla
+    const checkedRows = document.querySelectorAll('.summary-file-row.checked');
+    let keys = [];
+    if (checkedRows.length > 0) {
+        checkedRows.forEach(r => keys.push(r.dataset.key));
+    } else {
+        const customer = document.getElementById('summaryCustomerSelect')?.value;
+        const year = document.getElementById('summaryYearSelect')?.value;
+        fileStore.forEach((data, key) => { if (data.customer === customer && data.year === year) keys.push(key); });
+    }
+
+    if (!keys.length) {
+        document.getElementById('waStatusText').innerText = '⚠️ Gönderilecek evrak bulunamadı.';
+        document.getElementById('waSpinner').style.display = 'none';
+        return;
+    }
+
+    const zip = new JSZip();
+    for (let i = 0; i < keys.length; i++) {
+        const data = fileStore.get(keys[i]);
+        if (data) zip.file(data.name, base64ToUint8(data.base64));
+        document.getElementById('waSubText').innerText = (i+1) + ' / ' + keys.length + ' dosya eklendi';
+        await new Promise(r => setTimeout(r, 30));
+    }
+
+    document.getElementById('waStatusText').innerText = 'ZIP hazırlanıyor...';
+    _waZipBlob = await zip.generateAsync({ type: 'blob' });
+    _waZipName = 'evraklar_' + new Date().toLocaleDateString('tr-TR').replace(/\./g,'-') + '.zip';
+
+    // ZIP indir
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(_waZipBlob); a.download = _waZipName; a.click();
+
+    await new Promise(r => setTimeout(r, 600));
+
+    document.getElementById('waStep2').style.display = 'none';
+    document.getElementById('waStep3').style.display = 'block';
+    document.getElementById('waInstruction').innerText =
+        `"${_waZipName}" indirildi. WhatsApp Web açıldıktan sonra sohbet penceresinde ataç ikonuna tıklayıp bu ZIP dosyasını seçin.`;
+}
+
+function openWhatsappWeb() {
+    // Telefon numarası mu isim mi?
+    const digits = _waContact.replace(/\D/g,'');
+    let waUrl;
+    if (digits.length >= 7) {
+        waUrl = 'https://wa.me/' + digits + '?text=' + encodeURIComponent('Merhaba, beyanname evraklarını ZIP olarak ekte gönderiyorum.');
+    } else {
+        // İsim → WhatsApp Web arama açılamaz, genel aç
+        waUrl = 'https://web.whatsapp.com/';
+    }
+    window.open(waUrl, '_blank');
 }
 
 // ============================================================
@@ -1610,6 +1897,21 @@ window.addEventListener('DOMContentLoaded', () => {
     render('gecici-list', donemler, "Beyanname", "Tahakkuk");
     render('yillik-list', ["Gelir","Kurumlar"], "Beyanname", "Tahakkuk");
     render('mizan-list', ["1-3 Dönemi","4-6 Dönemi","7-9 Dönemi","10-12 Dönemi"], "Yükle", null);
+    // Mizan butonları için özel dosya tipi kontrolü
+    setTimeout(() => {
+        document.querySelectorAll('#mizan-list .file-btn').forEach(btn => {
+            btn.onclick = function(e) { e.stopPropagation(); currentBtn = this; isOzlukCurrent = false;
+                if (!this.classList.contains('filled')) { document.getElementById('mizanInput').click(); }
+                else {
+                    const rect = this.getBoundingClientRect();
+                    const menu = document.getElementById('miniMenu');
+                    menu.style.display = 'flex';
+                    if (window.innerWidth <= 767) { menu.style.left=''; menu.style.top=''; }
+                    else { menu.style.left = Math.min(rect.left, window.innerWidth-170)+'px'; menu.style.top=(rect.bottom+window.scrollY+5)+'px'; }
+                }
+            };
+        });
+    }, 100);
 })();
 </script>
 </body>
