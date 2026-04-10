@@ -755,8 +755,7 @@ async function restoreButtonsFromDB(customer, year) {
  * Format: 4 haneli yıl rakamı arar.
  */
 function detectPdfYear(ft) {
-    // "2025
-OCAK" veya "2026 ŞUBAT" gibi formatlarda yılı ara
+    // "2025 OCAK" veya "2026 SUBAT" gibi formatlarda yili ara
     const m = ft.match(/(20\d{2})/);
     return m ? parseInt(m[1], 10) : null;
 }
@@ -1793,7 +1792,7 @@ async function sendWhatsapp() {
 
     document.getElementById('waStep1').style.display = 'none';
     document.getElementById('waStep2').style.display = 'block';
-    document.getElementById('waStatusText').innerText = 'Dosyalar ZIP'e ekleniyor...';
+    document.getElementById('waStatusText').innerText = 'Dosyalar ZIP\'e ekleniyor...';
     document.getElementById('waSubText').innerText = '';
 
     // Dosyaları topla
